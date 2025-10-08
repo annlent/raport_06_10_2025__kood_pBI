@@ -1,0 +1,35 @@
+" WITH annual AS (
+         SELECT raa0061_raw.year,
+            raa0061_raw.indicator,
+            sum(raa0061_raw.value) FILTER (WHERE ((raa0061_raw.component ~~* '%Kapitali kogumahutus p%'::text) OR (raa0061_raw.component ~~* '%Gross fixed capital formation%'::text))) AS kapital,
+            sum(raa0061_raw.value) FILTER (WHERE ((raa0061_raw.component ~~* '%turuhindades%'::text) OR (raa0061_raw.component ~~* '%GDP at market prices%'::text))) AS skp
+           FROM stat_ee.raa0061_raw
+          GROUP BY raa0061_raw.year, raa0061_raw.indicator
+        ), metrics AS (
+         SELECT annual.year,
+            annual.indicator,
+            annual.skp,
+            round((annual.kapital / NULLIF(annual.skp, (0)::numeric)), 6) AS kapitali_skp_suhe,
+            round((((annual.skp - lag(annual.skp) OVER (PARTITION BY annual.indicator ORDER BY annual.year)) / NULLIF(lag(annual.skp) OVER (PARTITION BY annual.indicator ORDER BY annual.year), (0)::numeric)) * (100)::numeric), 2) AS skp_aastane_muutus_protsent
+           FROM annual
+          WHERE ((annual.kapital IS NOT NULL) AND (annual.skp IS NOT NULL))
+        ), with_windows AS (
+         SELECT m.year,
+            m.indicator,
+            m.skp,
+            m.kapitali_skp_suhe,
+            m.skp_aastane_muutus_protsent,
+            count(*) OVER (PARTITION BY m.indicator ORDER BY m.year ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS win_len,
+            avg(m.kapitali_skp_suhe) OVER (PARTITION BY m.indicator ORDER BY m.year ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS ratio_ma,
+            avg(m.skp_aastane_muutus_protsent) OVER (PARTITION BY m.indicator ORDER BY m.year ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS yoy_ma
+           FROM metrics m
+        )
+ SELECT year,
+    indicator,
+    kapitali_skp_suhe,
+    round(ratio_ma, 6) AS kapitali_skp_suhe_3a_keskmine,
+    skp_aastane_muutus_protsent,
+    round(yoy_ma, 2) AS skp_aastane_muutus_3a_keskmine
+   FROM with_windows
+  WHERE (win_len = 3)
+  ORDER BY year;"
