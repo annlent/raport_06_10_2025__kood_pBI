@@ -1,0 +1,24 @@
+" WITH kapital AS (
+         SELECT raa0061_raw.year,
+            raa0061_raw.quarter,
+            raa0061_raw.indicator,
+            sum(raa0061_raw.value) AS kapital
+           FROM stat_ee.raa0061_raw
+          WHERE ((raa0061_raw.component ~~* '%Kapitali kogumahutus põhivarasse%'::text) OR (raa0061_raw.component ~~* '%Gross fixed capital formation%'::text))
+          GROUP BY raa0061_raw.year, raa0061_raw.quarter, raa0061_raw.indicator
+        ), skp AS (
+         SELECT raa0061_raw.year,
+            raa0061_raw.quarter,
+            raa0061_raw.indicator,
+            sum(raa0061_raw.value) AS skp
+           FROM stat_ee.raa0061_raw
+          WHERE ((raa0061_raw.component ~~* '%TURUHINDADES%'::text) OR (raa0061_raw.component ~~* '%GDP at market prices%'::text))
+          GROUP BY raa0061_raw.year, raa0061_raw.quarter, raa0061_raw.indicator
+        )
+ SELECT k.year,
+    k.quarter,
+    k.indicator,
+    round((k.kapital / NULLIF(s.skp, (0)::numeric)), 6) AS kapitali_skp_suhe
+   FROM (kapital k
+     JOIN skp s ON (((s.year = k.year) AND (s.quarter = k.quarter) AND (s.indicator = k.indicator))))
+  ORDER BY k.year, k.quarter;"
